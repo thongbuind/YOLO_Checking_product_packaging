@@ -1,0 +1,10 @@
+__pycache__/
+
+.DS_Store
+
+*.tmp
+
+create_dataset/labels
+create_dataset/raw_image
+
+dataset/
