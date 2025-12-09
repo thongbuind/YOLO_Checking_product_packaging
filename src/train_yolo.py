@@ -11,7 +11,7 @@ try:
 except NameError:
     project_root = Path(PROJECT_DIR)
 
-config_file = project_root / "config.json"
+config_file = project_root / "config" / "config.json"
 src_dir = project_root / "src"
 
 with open(config_file, 'r') as f:

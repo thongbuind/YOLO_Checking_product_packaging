@@ -1,6 +1,19 @@
 import numpy as np
 from itertools import combinations
 
+def parse_obb_label(line):
+    """Đọc label OBB và tính center"""
+    parts = line.strip().split()
+    class_id = int(parts[0])
+    coords = [float(x) for x in parts[1:]]
+    
+    points = [(coords[i], coords[i+1]) for i in range(0, 8, 2)]
+    
+    center_x = sum(p[0] for p in points) / 4
+    center_y = sum(p[1] for p in points) / 4
+    
+    return [class_id, center_x, center_y]
+
 def fit_line_pca(points):
     pts = np.array(points)
     c = pts.mean(axis=0)
@@ -27,7 +40,7 @@ def find_collinear_three(points):
             best_group = list(comb)
     return best_group
 
-# Xác định slot
+# Xác định thứ tự slot
 def slot_position(cam, boxes):
     """
     Nếu là cam 1,2 thì số thứ tự slot sẽ từ 1 -> 5. Nếu là cam 3,4 thì số thứ tự slot sẽ từ 6 -> 10.
@@ -43,21 +56,23 @@ def slot_position(cam, boxes):
 
     Với line2 thì điểm nào gần slot 1(hoặc 6) hơn thì sẽ là slot 4(hoặc 9), điểm còn lại là slot 5(hoặc 10).
     """
+    if cam in [1, 2]:
+        start_slot = 1
+    elif cam in [3, 4]:
+        start_slot = 6
+    
     centers = np.array([[b[1], b[2]] for b in boxes])
 
-    # tìm 3 điểm thẳng hàng
     three_idx = find_collinear_three(centers)
     two_idx = [i for i in range(5) if i not in three_idx]
 
     line3_pts = centers[three_idx]
     line2_pts = centers[two_idx]
 
-    # vector line3 và vector vuông góc chuẩn hóa
     v_line3 = line3_pts[2] - line3_pts[0]
     perp = np.array([-v_line3[1], v_line3[0]])
     perp = perp / np.linalg.norm(perp)
 
-    # vector connect từ điểm giữa line3 -> line2
     p_mid = line3_pts[1]
     vec = line2_pts.mean(axis=0) - p_mid
     vec_connect = perp * np.dot(vec, perp)
@@ -73,18 +88,15 @@ def slot_position(cam, boxes):
     else:
         corner = np.array([1,1])
 
-    # sắp xếp line3 theo khoảng cách tới corner
     dist3 = np.linalg.norm(line3_pts - corner, axis=1)
     line3_order = [three_idx[i] for i in np.argsort(dist3)]
 
-    # sắp xếp line2 theo khoảng cách tới slot1
     slot1_pos = centers[line3_order[0]]
     dist2 = np.linalg.norm(line2_pts - slot1_pos, axis=1)
     line2_order = [two_idx[i] for i in np.argsort(dist2)]
 
-    # gán slot (nếu là cam 3 và 4 thì cộng thêm 5 vào số thứ tự của slot)
     result = {}
-    slot_num = 1
+    slot_num = start_slot
     for i in line3_order:
         result[slot_num] = boxes[i][0]
         slot_num += 1
