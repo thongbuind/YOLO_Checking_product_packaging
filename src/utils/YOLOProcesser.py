@@ -15,7 +15,7 @@ with open(config_file, 'r') as f:
 classes = config["classes"]
 
 class YOLOProcessor:
-    def __init__(self, model, image_size, conf_threshold=0.7, max_fps=10):
+    def __init__(self, model, image_size, conf_threshold=0.7, max_fps=30):
         self.model = model
         self.image_size = image_size
         self.conf_threshold = conf_threshold
@@ -41,36 +41,32 @@ class YOLOProcessor:
 
                 cam_names, frames = batch_data
 
-                # Chạy YOLO inference
                 results = self.model(frames, imgsz=self.image_size, 
                                    conf=self.conf_threshold, verbose=False)
 
                 processed = {}
 
                 for cam_name, result in zip(cam_names, results):
-                    slot_boxes = []
+                    slots_boxes = []
                     item_boxes = []
 
-                    # Xử lý OBB results
                     if result.obb is not None and len(result.obb) > 0:
                         for b in result.obb:
                             cls_id = int(b.cls[0])
     
-                            # Lấy nguyên 4 điểm chéo (8 số)
-                            points = b.xyxyxyxy[0].cpu().numpy().reshape(4, 2)  # shape: (4, 2)
+                            points = b.xyxyxyxy[0].cpu().numpy().reshape(4, 2)
 
-                            if cls_id == 0:  # slot
-                                slot_boxes.append(points)
+                            if cls_id == 0:
+                                slots_boxes.append(points)
                             elif 1 <= cls_id < len(classes):
                                 item_name = classes[cls_id]
                                 item_boxes.append((item_name, points))
 
                     processed[cam_name] = {
-                        "slot_boxes": slot_boxes,
-                        "item_boxes": item_boxes
+                        "slots_boxes": slots_boxes,
+                        "items_boxes": item_boxes
                     }
 
-                # Đẩy kết quả vào output queue
                 self.output_queue.put(processed)
 
             except Empty:
@@ -89,11 +85,9 @@ class YOLOProcessor:
         """
         current_time = time.time()
         
-        # Rate limiting
         if current_time - self.last_submit_time < 1.0 / self.max_fps:
             return False
         
-        # Nếu queue đầy, bỏ qua frame cũ
         if self.input_queue.full():
             try:
                 self.input_queue.get_nowait()

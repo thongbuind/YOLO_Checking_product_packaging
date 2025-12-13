@@ -8,3 +8,5 @@ create_dataset/labels
 create_dataset/raw_image
 
 dataset/
+
+test_func/process_single_camera

@@ -168,3 +168,113 @@ def make_grid(frames, fps_values, detection_results, sys_fps):
     combined = np.hstack((grid, debug_table))
     return combined
 
+# vẽ những thứ đang xuất hiện và thông tin cam
+def draw_visualization(frame, cam_info, items_boxes):
+    """
+    Vẽ visualization lên frame
+
+    - Slot: lấy từ cam_info.slots_list (vẽ box + in slot_id)
+    - Item: lấy từ items_boxes
+    """
+
+    # ===== Vẽ TOÀN BỘ SLOT từ cam_info.slots_list (DICT) =====
+    for slot_id, slot in cam_info.slots_list.items():
+        points = slot.get_points()
+        if points is None:
+            continue
+
+        pts = np.int32(points)
+        
+        # Chọn màu dựa trên state của slot
+        if slot.state == "oke":
+            color = (0, 255, 0)  # Xanh lá
+        elif slot.state == "wrong":
+            color = (0, 0, 255)  # Đỏ
+        elif slot.state == "empty":
+            color = (0, 0, 0)  # Đen
+        else:
+            color = (0, 255, 255)  # Vàng (default)
+        
+        cv2.polylines(frame, [pts], True, color, 3)
+
+        cx = int(np.mean(pts[:, 0]))
+        cy = int(np.mean(pts[:, 1]))
+
+        cv2.putText(
+            frame,
+            f"slot_{slot_id}",
+            (cx - 30, cy),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            color,
+            2
+        )
+
+    # ===== Vẽ ITEM =====
+    for item_name, points in items_boxes:
+        pts = np.int32(points)
+        cv2.polylines(frame, [pts], True, (255, 255, 0), 2)
+
+        cx = int(np.mean(pts[:, 0]))
+        cy = int(np.mean(pts[:, 1]))
+
+        cv2.putText(
+            frame,
+            item_name,
+            (cx - 30, cy - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 0),
+            2
+        )
+
+    # ===== Vẽ trạng thái camera (suy ra từ slot_will_be_checked) =====
+    slots = set(cam_info.slot_will_be_checked)
+
+    if 1 in slots and 4 not in slots:
+        cam_label = "CAM_1"
+    elif 1 in slots and 4 in slots:
+        cam_label = "CAM_2"
+    elif 6 in slots and 9 not in slots:
+        cam_label = "CAM_3"
+    elif 6 in slots and 9 in slots:
+        cam_label = "CAM_4"
+    else:
+        cam_label = "CAM_UNKNOWN"
+
+    cv2.putText(
+        frame,
+        f"{cam_label}: {cam_info.state.upper()}",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (0, 255, 255),
+        2
+    )
+
+    # ===== Bảng trạng thái slot cần check =====
+    if cam_info.get_state() in ["checking", "done", "false"]:
+        y_offset = 60
+
+        for slot_id in cam_info.slot_will_be_checked:
+            slot = cam_info.get_slot(slot_id)
+            if slot is None:
+                continue
+
+            if slot.state == "oke":
+                color = (0, 255, 0)
+            elif slot.state == "wrong":
+                color = (0, 0, 255)
+            else:
+                color = (200, 200, 200)
+
+            cv2.putText(
+                frame,
+                f"S{slot_id}: {slot.state}",
+                (10, y_offset),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                2
+            )
+            y_offset += 25

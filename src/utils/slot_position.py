@@ -1,19 +1,6 @@
 import numpy as np
 from itertools import combinations
 
-def parse_obb_label(line):
-    """Đọc label OBB và tính center"""
-    parts = line.strip().split()
-    class_id = int(parts[0])
-    coords = [float(x) for x in parts[1:]]
-    
-    points = [(coords[i], coords[i+1]) for i in range(0, 8, 2)]
-    
-    center_x = sum(p[0] for p in points) / 4
-    center_y = sum(p[1] for p in points) / 4
-    
-    return [class_id, center_x, center_y]
-
 def fit_line_pca(points):
     pts = np.array(points)
     c = pts.mean(axis=0)
@@ -40,27 +27,27 @@ def find_collinear_three(points):
             best_group = list(comb)
     return best_group
 
-# Xác định thứ tự slot
-def slot_position(cam, boxes):
+def slot_position(slots_boxes):
     """
-    Nếu là cam 1,2 thì số thứ tự slot sẽ từ 1 -> 5. Nếu là cam 3,4 thì số thứ tự slot sẽ từ 6 -> 10.
-
     Vẽ line3 đi qua 3 điểm thẳng hàng, line2 đi qua 2 điểm còn lại.
     Kẻ vector connect(x,y) từ điểm giữa line3 sang line 2, vuông góc với line3.
 
     Sẽ có 4 trường hợp với line3
-    Trường hợp 1: x dương y dương - slot 1(hoặc 6) gần góc trên bên phải hơn slot 2(hoặc 7) và 3(hoặc 8).
-    Trường hợp 2: x dương y âm - slot 1(hoặc 6) gần gốc toạ độ nhất.
-    Trường hợp 3: x âm y âm - slot 1(hoặc 6) gần góc dưới bên trái nhất.
-    Trường hợp 4: x âm y dương - slot 1(hoặc 6) gần góc dưới bên phải nhất.
+    Trường hợp 1: x dương y dương - slot 1 gần góc trên bên phải hơn slot 2 và 3.
+    Trường hợp 2: x dương y âm - slot 1 gần gốc toạ độ nhất.
+    Trường hợp 3: x âm y âm - slot 1 gần góc dưới bên trái nhất.
+    Trường hợp 4: x âm y dương - slot 1 gần góc dưới bên phải nhất.
 
-    Với line2 thì điểm nào gần slot 1(hoặc 6) hơn thì sẽ là slot 4(hoặc 9), điểm còn lại là slot 5(hoặc 10).
+    Với line2 thì điểm nào gần slot  hơn thì sẽ là slot , điểm còn lại là slot 5.
     """
-    if cam in [1, 2]:
-        start_slot = 1
-    elif cam in [3, 4]:
-        start_slot = 6
-    
+    boxes = []
+    for slot_pts in slots_boxes:
+        center_x = np.mean(slot_pts[:, 0])
+        center_y = np.mean(slot_pts[:, 1])
+        center_x_ratio = center_x / 640
+        center_y_ratio = center_y / 640
+        boxes.append([0, center_x_ratio, center_y_ratio])
+
     centers = np.array([[b[1], b[2]] for b in boxes])
 
     three_idx = find_collinear_three(centers)
@@ -96,12 +83,13 @@ def slot_position(cam, boxes):
     line2_order = [two_idx[i] for i in np.argsort(dist2)]
 
     result = {}
-    slot_num = start_slot
-    for i in line3_order:
-        result[slot_num] = boxes[i][0]
+    slot_num = 1
+
+    for idx in line3_order:
+        result[slot_num] = idx
         slot_num += 1
-    for i in line2_order:
-        result[slot_num] = boxes[i][0]
+    for idx in line2_order:
+        result[slot_num] = idx
         slot_num += 1
 
-    return result, vec_connect, p_mid
+    return result

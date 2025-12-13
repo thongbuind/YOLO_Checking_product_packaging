@@ -1,0 +1,52 @@
+import numpy as np
+from dataclasses import dataclass
+from typing import List, Optional, Dict
+
+@dataclass
+class SlotInfo:
+    expected_item: str
+    points: Optional[np.ndarray] = None
+    state: str = "empty" # empty / oke / wrong
+
+    def __init__(self, expected_item, points=None, state="empty"):
+        self.expected_item = expected_item
+        self.points = points
+        self.state = state
+
+    def set_state(self, new_state: str):
+        self.state = new_state
+
+    def set_points(self, new_points: Optional[np.ndarray]):
+        self.points = new_points
+
+    def get_state(self) -> str:
+        return self.state
+
+    def get_points(self) -> Optional[np.ndarray]:
+        return self.points
+    
+    def get_expected_item(self):
+        return self.expected_item
+
+    def update(self, points: Optional[np.ndarray]):
+        self.points = points
+
+@dataclass
+class CamInfo:
+    slot_will_be_checked: List[int]
+    slots_list: Dict[int, SlotInfo]
+    state: str = "waiting" # waiting / checking / done / false
+    
+    def __init__(self, slot_will_be_checked, slots_list, state="waiting"):
+        self.state = state
+        self.slot_will_be_checked = slot_will_be_checked
+        self.slots_list = slots_list
+
+    def set_state(self, new_state: str):
+        self.state = new_state
+
+    def get_state(self) -> str:
+        return self.state
+
+    def get_slot(self, slot_id: int) -> Optional[SlotInfo]:
+        return self.slots_list.get(slot_id)
