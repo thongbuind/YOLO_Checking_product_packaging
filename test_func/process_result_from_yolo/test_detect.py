@@ -48,7 +48,6 @@ VALID_EXT = [".jpg", ".png", ".jpeg"]
 
 slot_expected_items = {i: config[f"slot_{i}"] for i in range(1, 11)}
 
-# ================== MODEL ==================
 model = YOLO(MODEL_FILE).to("mps:0")
 model.fuse()
 
@@ -57,33 +56,11 @@ slot_will_be_checked_of_cam_2 = [1, 2, 3, 4, 5]
 slot_will_be_checked_of_cam_3 = [6, 7, 8]
 slot_will_be_checked_of_cam_4 = [6, 7, 8, 9, 10]
 
-slots = {
-    1: SlotInfo(expected_item=slot_expected_items[1]),
-    2: SlotInfo(expected_item=slot_expected_items[2]),
-    3: SlotInfo(expected_item=slot_expected_items[3]),
-    4: SlotInfo(expected_item=slot_expected_items[4]),
-    5: SlotInfo(expected_item=slot_expected_items[5]),
-    6: SlotInfo(expected_item=slot_expected_items[6]),
-    7: SlotInfo(expected_item=slot_expected_items[7]),
-    8: SlotInfo(expected_item=slot_expected_items[8]),
-    9: SlotInfo(expected_item=slot_expected_items[9]),
-    10: SlotInfo(expected_item=slot_expected_items[10]),
-}
+slots = {i: SlotInfo(expected_item=slot_expected_items[i]) for i in range(1, 11)}
 
-slots_list_for_cam_12 = {
-    1: slots[1],
-    2: slots[2],
-    3: slots[3],
-    4: slots[4],
-    5: slots[5]
-}
-slots_list_for_cam_34 = {
-    6: slots[6],
-    7: slots[7],
-    8: slots[8],
-    9: slots[9],
-    10: slots[10]
-}
+slots_list_for_cam_12 = {i: slots[i] for i in range(1, 6)}
+slots_list_for_cam_34 = {i: slots[i] for i in range(6, 11)}
+
 cameras = {
     "cam_1": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_1, slots_list=slots_list_for_cam_12),
     "cam_2": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_2, slots_list=slots_list_for_cam_12),
@@ -107,10 +84,6 @@ cam_images = {
 
 max_len = max(len(v) for v in cam_images.values())
 
-# ================== UTILS ==================
-def black_frame():
-    return np.zeros((IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8)
-
 # ================== MAIN ==================
 print("\n=== START TEST (cam_12 / cam_34) ===\n")
 
@@ -119,58 +92,38 @@ total_frames = 0
 
 for idx in range(max_len):
     frames = {}
-    yolo_results = {}
 
-    # -------- LOAD FRAME --------
+    # -------- LOAD FRAMES --------
     for cam_id, imgs in cam_images.items():
         if idx < len(imgs):
             frame = cv2.imread(str(imgs[idx]))
             if frame is None:
-                frame = black_frame()
+                frame = np.zeros((IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8)
         else:
-            frame = black_frame()
+            frame = np.zeros((IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8)
 
         frame = cv2.resize(frame, (IMAGE_SIZE, IMAGE_SIZE))
         frames[cam_id] = frame
 
-    CONF_BY_CLASS = {
-        0: 0.4,
-    }
-    DEFAULT_CONF = 0.7
-    # -------- YOLO --------
-    for cam_id, frame in frames.items():
-        res = model(frame, imgsz=IMAGE_SIZE, conf=0.3, device="mps")[0]
-
-        slots_boxes, items_boxes = [], []
-
-        if res.obb is not None:
-            xyxyxyxy = res.obb.xyxyxyxy.cpu().numpy()
-            cls_ids  = res.obb.cls.cpu().numpy().astype(int)
-            confs    = res.obb.conf.cpu().numpy()
-
-            for pts, cls_id, score in zip(xyxyxyxy, cls_ids, confs):
-                min_conf = CONF_BY_CLASS.get(cls_id, DEFAULT_CONF)
-                if score < min_conf:
-                    continue
-
-                pts = pts.astype(np.float32)
-
-                if cls_id == 0:
-                    slots_boxes.append(pts)
-                else:
-                    item_name = CLASSES[cls_id] if cls_id < len(CLASSES) else f"class_{cls_id}"
-                    items_boxes.append((item_name, pts))
-
-        yolo_results[cam_id] = {
-            "slots_boxes": slots_boxes,
-            "items_boxes": items_boxes
-        }
-
-    # -------- LOGIC --------
+    # -------- YOLO BATCH INFERENCE (giống detect.py) --------
+    cam_names = list(frames.keys())
+    frame_list = [frames[n] for n in cam_names]
+    
+    batch_results = model(frame_list, imgsz=IMAGE_SIZE, device="mps:0")
+    
+    # -------- XỬ LÝ KẾT QUẢ (giống detect.py) --------
     start = time.time()
+    
     frames = process_results_from_yolo(
-        frames, yolo_results, cameras, camera_locks, executor
+        frames=frames,
+        batch_results=batch_results,
+        cameras=cameras,
+        cam_names=cam_names,
+        classes=CLASSES,
+        camera_locks=camera_locks,
+        executor=executor
     )
+    
     elapsed = (time.time() - start) * 1000
 
     total_time += elapsed

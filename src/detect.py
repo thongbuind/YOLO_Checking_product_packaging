@@ -60,13 +60,13 @@ HÀM process_results_from_yolo:
 
 import cv2
 import json
+import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
 from utils.CamThread import CamThread
-from utils.YOLOProcesser import YOLOProcessor
 from utils.visual import FPSCalculator, make_grid
 from utils.CamInfo import SlotInfo, CamInfo
 from utils.process_results_from_yolo import process_results_from_yolo
@@ -92,49 +92,26 @@ cam_configs = [
     ("cam_4", 1)
 ]
 
-cam_threads = {
-    name: CamThread(name, source, mode="webcam") # hoặc mode="rtsp"
-    for name, source in cam_configs
-}
-yolo_processor = YOLOProcessor(model, image_size, conf_threshold=0.7, max_fps=30)
-
 slot_will_be_checked_of_cam_1 = [1, 2, 3]
-slot_will_be_checked_of_cam_2 = [4, 5]
+slot_will_be_checked_of_cam_2 = [1, 2, 3, 4, 5]
 slot_will_be_checked_of_cam_3 = [6, 7, 8]
-slot_will_be_checked_of_cam_4 = [9, 10]
+slot_will_be_checked_of_cam_4 = [6, 7, 8, 9, 10]
 
-slots = {
-    1: SlotInfo(expected_item=slot_expected_items[1]),
-    2: SlotInfo(expected_item=slot_expected_items[2]),
-    3: SlotInfo(expected_item=slot_expected_items[3]),
-    4: SlotInfo(expected_item=slot_expected_items[4]),
-    5: SlotInfo(expected_item=slot_expected_items[5]),
-    6: SlotInfo(expected_item=slot_expected_items[6]),
-    7: SlotInfo(expected_item=slot_expected_items[7]),
-    8: SlotInfo(expected_item=slot_expected_items[8]),
-    9: SlotInfo(expected_item=slot_expected_items[9]),
-    10: SlotInfo(expected_item=slot_expected_items[10]),
-}
+slots = {i: SlotInfo(expected_item=slot_expected_items[i]) for i in range(1, 11)}
 
-slots_list_for_cam_12 = {
-    1: slots[1],
-    2: slots[2],
-    3: slots[3],
-    4: slots[4],
-    5: slots[5]
-}
-slots_list_for_cam_34 = {
-    6: slots[6],
-    7: slots[7],
-    8: slots[8],
-    9: slots[9],
-    10: slots[10]
-}
+slots_list_for_cam_12 = {i: slots[i] for i in range(1, 6)}
+slots_list_for_cam_34 = {i: slots[i] for i in range(6, 11)}
+
 cameras = {
     "cam_1": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_1, slots_list=slots_list_for_cam_12),
     "cam_2": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_2, slots_list=slots_list_for_cam_12),
     "cam_3": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_3, slots_list=slots_list_for_cam_34),
     "cam_4": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_4, slots_list=slots_list_for_cam_34),
+}
+
+cam_threads = {
+    name: CamThread(name, source, mode="webcam") # hoặc mode="rtsp"
+    for name, source in cam_configs
 }
 
 camera_locks = {
@@ -144,53 +121,49 @@ camera_locks = {
 
 executor = ThreadPoolExecutor(max_workers=4)
 
-detection_results = {}
 fps_calc = FPSCalculator()
 
-try:
-    while True:
-        fps_calc.update()
-        frames = {}
-        fps_values = {}
+while True:
+    fps_calc.update()
+    frames = {}
+    fps_values = {}
         
-        for name, cam in cam_threads.items():
-            frame, fps = cam.read()
-            if frame is not None:
-                frames[name] = frame
-                fps_values[name] = fps
+    for name, cam in cam_threads.items():
+        frame, fps = cam.read()
+        if frame is not None:
+            frames[name] = frame
+            fps_values[name] = fps
         
-        if len(frames) != 4:
-            continue
+    if len(frames) != 4:
+        continue
         
-        cam_names = list(frames.keys())
-        frame_list = [frames[n] for n in cam_names]
-        yolo_processor.submit(cam_names, frame_list)
-        
-        new_results = yolo_processor.get_results()
-        if new_results is not None:
-            detection_results = new_results
-        
-        if detection_results:
-            frames = process_results_from_yolo(
-                frames=frames,
-                yolo_results=detection_results,
-                cameras=cameras,
-                camera_locks=camera_locks,
-                executor=executor
-            )
-        
-        sys_fps = fps_calc.get_fps()
-        grid = make_grid(frames, fps_values, detection_results, sys_fps)
-        cv2.imshow("4 Cameras - Assembly Check System", grid)
-        
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    cam_names = list(frames.keys())
+    frame_list = [frames[n] for n in cam_names]
 
-finally:
-    print("\n[INFO] Shutting down...")
-    for cam in cam_threads.values():
-        cam.release()
-    yolo_processor.stop()
-    executor.shutdown(wait=True)
-    cv2.destroyAllWindows()
-    print("[INFO] System stopped")
+    batch_results = model(frame_list, imgsz=image_size, device="mps:0")
+    # khi không có object thì chạy mất 50ms
+    # khi có object thì chạy mất 100ms
+
+    frames = process_results_from_yolo(
+        frames=frames,
+        batch_results=batch_results,
+        cameras=cameras,
+        cam_names=cam_names,
+        classes=classes,
+        camera_locks=camera_locks,
+        executor=executor
+    )
+
+    sys_fps = fps_calc.get_fps()
+    grid = make_grid(frames, fps_values, sys_fps)
+    cv2.imshow("4 Cameras - Assembly Check System", grid)
+        
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+print("\n[INFO] Shutting down...")
+for cam in cam_threads.values():
+    cam.release()
+executor.shutdown(wait=True)
+cv2.destroyAllWindows()
+print("[INFO] System stopped")

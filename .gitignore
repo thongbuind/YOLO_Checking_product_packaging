@@ -8,5 +8,8 @@ create_dataset/labels
 create_dataset/raw_image
 
 dataset/
+model/
 
-test_func/process_single_camera
+test_func/process_result_from_yolo/data
+test_func/process_result_from_yolo/output
+

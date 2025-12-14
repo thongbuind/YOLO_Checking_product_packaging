@@ -16,8 +16,7 @@ class FPSCalculator:
             return 0.0
         return len(self.timestamps) / (self.timestamps[-1] - self.timestamps[0] + 1e-6)
 
-def create_debug_table(fps_values, detection_results, sys_fps,
-                       table_width=480, table_height=960):
+def create_debug_table(fps_values, sys_fps, table_width=480, table_height=960):
     table = np.zeros((table_height, table_width, 3), dtype=np.uint8)
     table[:] = (30, 30, 30)
     
@@ -69,78 +68,6 @@ def create_debug_table(fps_values, detection_results, sys_fps,
 
     y_offset += 10
 
-    # Detection Summary
-    y_offset = draw_section("DETECTION SUMMARY", y_offset)
-    total_slots = total_items = 0
-    for cam_name in sorted(detection_results.keys()):
-        det = detection_results[cam_name]
-        n_slot = len(det.get('slot_boxes', []))
-        n_item = len(det.get('item_boxes', []))
-        total_slots += n_slot
-        total_items += n_item
-        y_offset = draw_text(f"{cam_name}:", y_offset, COLOR_HEADER, 0.52, bold=True)
-        y_offset = draw_text(f"  Slots : {n_slot}/5", y_offset, COLOR_VALUE if n_slot==5 else COLOR_WARNING, 0.48)
-        y_offset = draw_text(f"  Items : {n_item}", y_offset, COLOR_VALUE, 0.48)
-    
-    y_offset = draw_line(y_offset - 5)
-    y_offset = draw_text(f"TOTAL → Slots: {total_slots} | Items: {total_items}", y_offset, COLOR_TITLE, 0.55, bold=True)
-    y_offset += 10
-
-    # Items Detected (hỗ trợ OBB)
-    y_offset = draw_section("ITEMS DETECTED", y_offset)
-    item_counts = {}
-    has_item = False
-    for cam_name in sorted(detection_results.keys()):
-        items = detection_results[cam_name].get('item_boxes', [])
-        if items:
-            has_item = True
-            y_offset = draw_text(f"{cam_name}:", y_offset, COLOR_HEADER, 0.52, bold=True)
-            for item_name, box_data in items[:7]:
-                try:
-                    if isinstance(box_data, (list, tuple, np.ndarray)):
-                        pts = np.array(box_data).reshape(-1, 2)
-                        center = pts.mean(axis=0).astype(int)
-                        pos = f"({center[0]},{center[1]})"
-                    else:
-                        pos = "(?,?)"
-                except:
-                    pos = "(error)"
-                y_offset = draw_text(f"  {item_name} @ {pos}", y_offset, COLOR_VALUE, 0.45)
-                item_counts[item_name] = item_counts.get(item_name, 0) + 1
-
-    if not has_item:
-        y_offset = draw_text("No items detected", y_offset, COLOR_WARNING, 0.52)
-
-    # Item Statistics Bar
-    if item_counts:
-        y_offset += 10
-        y_offset = draw_section("ITEM STATISTICS", y_offset)
-        max_count = max(item_counts.values()) if item_counts else 1
-        for item_name, count in sorted(item_counts.items(), key=lambda x: -x[1]):
-            bar_len = int(180 * count / max_count)
-            cv2.rectangle(table, (padding_left + 120, y_offset - 14),
-                         (padding_left + 120 + bar_len, y_offset - 4), COLOR_VALUE, -1)
-            y_offset = draw_text(f"{item_name}: {count}", y_offset, COLOR_TEXT, 0.48)
-
-    # Alerts
-    y_offset += 15
-    y_offset = draw_section("ALERTS", y_offset)
-    alerts = []
-    for cam_name, fps in fps_values.items():
-        if fps < 10:
-            alerts.append(f"{cam_name} FPS quá thấp: {fps:.1f}")
-    if total_slots == 0:
-        alerts.append("Không phát hiện slot nào")
-    for cam_name, det in detection_results.items():
-        if len(det.get('slot_boxes', [])) not in (0, 5):
-            alerts.append(f"{cam_name} chỉ thấy {len(det.get('slot_boxes', []))} slot")
-
-    if alerts:
-        for a in alerts[:7]:
-            y_offset = draw_text(a, y_offset, COLOR_ERROR, 0.48, bold=True)
-    else:
-        y_offset = draw_text("Tất cả hệ thống ổn định", y_offset, COLOR_VALUE, 0.55)
-
     # Footer
     footer_y = table_height - 40
     cv2.line(table, (0, footer_y), (table_width, footer_y), COLOR_DIVIDER, 1)
@@ -149,7 +76,7 @@ def create_debug_table(fps_values, detection_results, sys_fps,
 
     return table
 
-def make_grid(frames, fps_values, detection_results, sys_fps):
+def make_grid(frames, fps_values, sys_fps):
     # Grid 2x2
     top = np.hstack((frames["cam_1"], frames["cam_2"]))
     bottom = np.hstack((frames["cam_3"], frames["cam_4"]))
@@ -158,7 +85,6 @@ def make_grid(frames, fps_values, detection_results, sys_fps):
     # Debug table
     debug_table = create_debug_table(
         fps_values=fps_values,
-        detection_results=detection_results or {},
         sys_fps=sys_fps,
         table_width=500,
         table_height=grid.shape[0]
@@ -168,113 +94,182 @@ def make_grid(frames, fps_values, detection_results, sys_fps):
     combined = np.hstack((grid, debug_table))
     return combined
 
-# vẽ những thứ đang xuất hiện và thông tin cam
+SLOT_COLORS = {
+    "empty": (0, 255, 255),      # Vàng - Slot trống
+    "oke": (0, 255, 0),      # Xanh lá - Slot có item đúng
+    "wrong": (0, 0, 255),    # Đỏ - Slot có item sai
+    "default": (128, 128, 128) # Xám - State không xác định
+}
+
+# Màu item
+ITEM_COLOR = (255, 255, 0)  # Vàng
+
+# Màu camera state text
+CAM_STATE_COLORS = {
+    "done": (0, 255, 0),       # Xanh lá - Tất cả slots OK
+    "false": (0, 0, 255),      # Đỏ - Có ít nhất 1 slot sai
+    "checking": (0, 255, 255), # Vàng - Đang kiểm tra
+    "waiting": (128, 128, 128) # Xám - Chờ slots xuất hiện
+}
+
+# Cấu hình text
+CAM_LABEL_COLOR = (0, 255, 255)
+SLOT_LINE_THICKNESS = 3
+ITEM_LINE_THICKNESS = 2
+TEXT_THICKNESS = 2
+TEXT_FONT = cv2.FONT_HERSHEY_SIMPLEX
+TEXT_SCALE = 0.6
+TEXT_SCALE_SMALL = 0.5
+TEXT_SCALE_LARGE = 0.8
+
+# Cấu hình overlay (nền mờ)
+OVERLAY_COLOR = (0, 0, 0)      # Đen
+OVERLAY_ALPHA = 0.5            # Độ trong suốt (0-1)
+OVERLAY_PADDING = 10           # Khoảng cách padding
+
 def draw_visualization(frame, cam_info, items_boxes):
-    """
-    Vẽ visualization lên frame
+    _draw_all_slots(frame, cam_info)
+    _draw_all_items(frame, items_boxes)
+    _draw_camera_info(frame, cam_info)
+    _draw_slot_status_table(frame, cam_info)
 
-    - Slot: lấy từ cam_info.slots_list (vẽ box + in slot_id)
-    - Item: lấy từ items_boxes
-    """
-
-    # ===== Vẽ TOÀN BỘ SLOT từ cam_info.slots_list (DICT) =====
+def _draw_all_slots(frame, cam_info):
+    """Vẽ tất cả slots từ cam_info.slots_list"""
     for slot_id, slot in cam_info.slots_list.items():
         points = slot.get_points()
         if points is None:
             continue
-
+        
         pts = np.int32(points)
+        color = SLOT_COLORS.get(slot.state, SLOT_COLORS["default"])
         
-        # Chọn màu dựa trên state của slot
-        if slot.state == "oke":
-            color = (0, 255, 0)  # Xanh lá
-        elif slot.state == "wrong":
-            color = (0, 0, 255)  # Đỏ
-        elif slot.state == "empty":
-            color = (0, 0, 0)  # Đen
-        else:
-            color = (0, 255, 255)  # Vàng (default)
+        # Vẽ box
+        cv2.polylines(frame, [pts], isClosed=True, color=color, thickness=SLOT_LINE_THICKNESS)
         
-        cv2.polylines(frame, [pts], True, color, 3)
-
-        cx = int(np.mean(pts[:, 0]))
-        cy = int(np.mean(pts[:, 1]))
-
+        # Vẽ label
+        center_x = int(np.mean(pts[:, 0]))
+        center_y = int(np.mean(pts[:, 1]))
+        
         cv2.putText(
             frame,
             f"slot_{slot_id}",
-            (cx - 30, cy),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
+            (center_x - 30, center_y),
+            TEXT_FONT,
+            TEXT_SCALE,
             color,
-            2
+            TEXT_THICKNESS
         )
 
-    # ===== Vẽ ITEM =====
+def _draw_all_items(frame, items_boxes):
+    """Vẽ tất cả items"""
     for item_name, points in items_boxes:
         pts = np.int32(points)
-        cv2.polylines(frame, [pts], True, (255, 255, 0), 2)
-
-        cx = int(np.mean(pts[:, 0]))
-        cy = int(np.mean(pts[:, 1]))
-
+        
+        # Vẽ box
+        cv2.polylines(frame, [pts], isClosed=True, color=ITEM_COLOR, thickness=ITEM_LINE_THICKNESS)
+        
+        # Vẽ label
+        center_x = int(np.mean(pts[:, 0]))
+        center_y = int(np.mean(pts[:, 1]))
+        
         cv2.putText(
             frame,
             item_name,
-            (cx - 30, cy - 10),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 0),
-            2
+            (center_x - 30, center_y - 10),
+            TEXT_FONT,
+            TEXT_SCALE,
+            ITEM_COLOR,
+            TEXT_THICKNESS
         )
 
-    # ===== Vẽ trạng thái camera (suy ra từ slot_will_be_checked) =====
-    slots = set(cam_info.slot_will_be_checked)
-
-    if 1 in slots and 4 not in slots:
-        cam_label = "CAM_1"
-    elif 1 in slots and 4 in slots:
-        cam_label = "CAM_2"
-    elif 6 in slots and 9 not in slots:
-        cam_label = "CAM_3"
-    elif 6 in slots and 9 in slots:
-        cam_label = "CAM_4"
-    else:
-        cam_label = "CAM_UNKNOWN"
-
+def _draw_camera_info(frame, cam_info):
+    """Vẽ thông tin camera (label + state) - Màu text theo state"""
+    cam_label = _get_camera_label(cam_info.slot_will_be_checked)
+    text_color = CAM_STATE_COLORS.get(cam_info.state, CAM_STATE_COLORS["waiting"])
+    text = f"{cam_label}: {cam_info.state.upper()}"
+    
+    # Tính kích thước text
+    (text_width, text_height), baseline = cv2.getTextSize(
+        text, TEXT_FONT, TEXT_SCALE_LARGE, TEXT_THICKNESS
+    )
+    
+    # Vẽ nền mờ
+    x1, y1 = 10 - OVERLAY_PADDING, 30 - text_height - OVERLAY_PADDING
+    x2, y2 = 10 + text_width + OVERLAY_PADDING, 30 + baseline + OVERLAY_PADDING
+    _draw_overlay(frame, x1, y1, x2, y2)
+    
+    # Vẽ text
     cv2.putText(
         frame,
-        f"{cam_label}: {cam_info.state.upper()}",
+        text,
         (10, 30),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (0, 255, 255),
-        2
+        TEXT_FONT,
+        TEXT_SCALE_LARGE,
+        text_color,
+        TEXT_THICKNESS
     )
 
-    # ===== Bảng trạng thái slot cần check =====
-    if cam_info.get_state() in ["checking", "done", "false"]:
-        y_offset = 60
+def _draw_slot_status_table(frame, cam_info):
+    """Vẽ bảng trạng thái các slot cần check - Mỗi slot màu riêng theo state"""
+    if cam_info.get_state() not in ["checking", "done", "false"]:
+        return
+    
+    # Tính kích thước nền cho toàn bộ bảng
+    slot_count = len(cam_info.slot_will_be_checked)
+    if slot_count == 0:
+        return
+    
+    # Tính kích thước text mẫu để ước lượng
+    sample_text = "S10: wrong"
+    (text_width, text_height), baseline = cv2.getTextSize(
+        sample_text, TEXT_FONT, TEXT_SCALE_SMALL, TEXT_THICKNESS
+    )
+    
+    # Vẽ nền mờ cho toàn bộ bảng
+    x1 = 10 - OVERLAY_PADDING
+    y1 = 60 - text_height - OVERLAY_PADDING
+    x2 = 10 + text_width + OVERLAY_PADDING * 2
+    y2 = 60 + (25 * slot_count) + OVERLAY_PADDING
+    _draw_overlay(frame, x1, y1, x2, y2)
+    
+    # Vẽ từng slot
+    y_offset = 60
+    for slot_id in cam_info.slot_will_be_checked:
+        slot = cam_info.get_slot(slot_id)
+        if slot is None:
+            continue
+        
+        # Mỗi slot có màu riêng dựa trên state của nó
+        text_color = SLOT_COLORS.get(slot.state, SLOT_COLORS["default"])
+        
+        cv2.putText(
+            frame,
+            f"S{slot_id}: {slot.state}",
+            (10, y_offset),
+            TEXT_FONT,
+            TEXT_SCALE_SMALL,
+            text_color,
+            TEXT_THICKNESS
+        )
+        y_offset += 25
 
-        for slot_id in cam_info.slot_will_be_checked:
-            slot = cam_info.get_slot(slot_id)
-            if slot is None:
-                continue
+def _get_camera_label(slot_will_be_checked):
+    """Xác định camera label dựa trên slots cần check"""
+    slots = set(slot_will_be_checked)
+    
+    if 1 in slots and 4 not in slots:
+        return "CAM_1"
+    elif 1 in slots and 4 in slots:
+        return "CAM_2"
+    elif 6 in slots and 9 not in slots:
+        return "CAM_3"
+    elif 6 in slots and 9 in slots:
+        return "CAM_4"
+    else:
+        return "CAM_UNKNOWN"
 
-            if slot.state == "oke":
-                color = (0, 255, 0)
-            elif slot.state == "wrong":
-                color = (0, 0, 255)
-            else:
-                color = (200, 200, 200)
-
-            cv2.putText(
-                frame,
-                f"S{slot_id}: {slot.state}",
-                (10, y_offset),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                color,
-                2
-            )
-            y_offset += 25
+def _draw_overlay(frame, x1, y1, x2, y2):
+    """Vẽ nền mờ (overlay) tại vị trí chỉ định"""
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x1, y1), (x2, y2), OVERLAY_COLOR, -1)
+    cv2.addWeighted(overlay, OVERLAY_ALPHA, frame, 1 - OVERLAY_ALPHA, 0, frame)

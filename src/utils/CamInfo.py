@@ -50,3 +50,14 @@ class CamInfo:
 
     def get_slot(self, slot_id: int) -> Optional[SlotInfo]:
         return self.slots_list.get(slot_id)
+
+    def update_slot(self, slot_mapping: dict[int, int], slots_boxes: list[np.ndarray]):
+        offset = 0
+        if self.slot_will_be_checked[0] >= 6:
+            offset = 5
+
+        for slot_num, box_idx in slot_mapping.items():
+            adjusted_slot_id = slot_num + offset
+            slot = self.get_slot(adjusted_slot_id)
+            if slot is not None:
+                slot.update(slots_boxes[box_idx])
