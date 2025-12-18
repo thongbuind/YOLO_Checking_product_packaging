@@ -7,8 +7,8 @@ from pathlib import Path
 from ultralytics import YOLO
 from concurrent.futures import ThreadPoolExecutor
 
-from utils.process_results_from_yolo import process_results_from_yolo
-from utils.CamInfo import SlotInfo, CamInfo
+from logic.process_results_from_yolo import process_results_from_yolo
+from camera.CamInfo import SlotInfo, CamInfo
 
 # ================== PATH ==================
 MODEL_FILE = Path("/Users/thongbui.nd/Documents/Thong Bui/cuoi_ky_ai/model/best.pt")

@@ -1,44 +1,19 @@
 import numpy as np
-from itertools import combinations
-
-def fit_line_pca(points):
-    pts = np.array(points)
-    c = pts.mean(axis=0)
-    shifted = pts - c
-    cov = np.cov(shifted.T)
-    eigvals, eigvecs = np.linalg.eig(cov)
-    d = eigvecs[:, np.argmax(eigvals)]
-    return c, d / np.linalg.norm(d)
-
-# Tìm 3 điểm thẳng hàng nhất
-def find_collinear_three(points):
-    pts = np.array(points)
-    best_group = None
-    best_error = float("inf")
-    for comb in combinations(range(5), 3):
-        subset = pts[list(comb)]
-        c, d = fit_line_pca(subset)
-        perp = np.array([-d[1], d[0]])
-        shifted = subset - c
-        dists = np.abs(np.dot(shifted, perp))
-        total_error = dists.sum()
-        if total_error < best_error:
-            best_error = total_error
-            best_group = list(comb)
-    return best_group
+from utils.caculate import find_collinear_three
 
 def slot_position(slots_boxes):
     """
-    Vẽ line3 đi qua 3 điểm thẳng hàng, line2 đi qua 2 điểm còn lại.
-    Kẻ vector connect(x,y) từ điểm giữa line3 sang line 2, vuông góc với line3.
+    NẾU ĐỦ 5 SLOT:
+        Vẽ line3 đi qua 3 điểm thẳng hàng, line2 đi qua 2 điểm còn lại.
+        Kẻ vector connect(x,y) từ điểm giữa line3 sang line 2, vuông góc với line3.
 
-    Sẽ có 4 trường hợp với line3
-    Trường hợp 1: x dương y dương - slot 1 gần góc trên bên phải hơn slot 2 và 3.
-    Trường hợp 2: x dương y âm - slot 1 gần gốc toạ độ nhất.
-    Trường hợp 3: x âm y âm - slot 1 gần góc dưới bên trái nhất.
-    Trường hợp 4: x âm y dương - slot 1 gần góc dưới bên phải nhất.
+        Sẽ có 4 trường hợp với line3
+        Trường hợp 1: x dương y dương - slot 1 gần góc trên bên phải hơn slot 2 và 3.
+        Trường hợp 2: x dương y âm - slot 1 gần gốc toạ độ nhất.
+        Trường hợp 3: x âm y âm - slot 1 gần góc dưới bên trái nhất.
+        Trường hợp 4: x âm y dương - slot 1 gần góc dưới bên phải nhất.
 
-    Với line2 thì điểm nào gần slot  hơn thì sẽ là slot , điểm còn lại là slot 5.
+        Với line2 thì điểm nào gần slot  hơn thì sẽ là slot , điểm còn lại là slot 5.
     """
     boxes = []
     for slot_pts in slots_boxes:

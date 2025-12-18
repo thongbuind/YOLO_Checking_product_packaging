@@ -6,10 +6,10 @@ from ultralytics import YOLO
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
-from utils.CamThread import CamThread
+from camera.CamThread import CamThread
 from utils.visual import FPSCalculator, make_grid
-from utils.CamInfo import SlotInfo, CamInfo
-from utils.process_results_from_yolo import process_results_from_yolo
+from camera.CamInfo import SlotInfo, CamInfo
+from logic.process_results_from_yolo import process_results_from_yolo
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent

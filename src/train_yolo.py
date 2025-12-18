@@ -17,8 +17,8 @@ src_dir = project_root / "src"
 with open(config_file, 'r') as f:
     config = json.load(f)
 image_size = config["image_size"]
-batch_size = config["batch_size"]
-epochs = config["epochs"]
+batch_size = config["training_batch_size"]
+epochs = config["training_epochs"]
 
 model = YOLO("yolov8n-obb.pt")
 model.train(

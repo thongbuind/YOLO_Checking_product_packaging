@@ -1,9 +1,9 @@
 """
 QUY TRÌNH ĐÓNG GÓI:
-    - Cam 1: Cho 3 "mach_nho" vào slot_1, slot_2 và slot_3.                             # slot_will_be_checked có 3 slot
-    - Cam 2: Cho "mach_lon" vào slot_4, cho usb_to_jtag vào slot_5                      # slot_will_be_checked có 2 slot
-    - Cam 3: Cho "day_black" vào slot_6, "day_lgbt" vào slot_7, "day_white" vào slot_8  # slot_will_be_checked có 3 slot
-    - Cam 4: Cho "pack_circut" vào slot_9, "day_gray" vào slot_10                       # slot_will_be_checked có 2 slot
+    - Cam 1: Cho 3 "mach_nho" vào slot_1, slot_2 và slot_3.                             
+    - Cam 2: Cho "mach_lon" vào slot_4, cho usb_to_jtag vào slot_5                      
+    - Cam 3: Cho "day_black" vào slot_6, "day_lgbt" vào slot_7, "day_white" vào slot_8  
+    - Cam 4: Cho "pack_circut" vào slot_9, "day_gray" vào slot_10                       
 
 QUY TRÌNH XỬ LÝ:
     - Ban đầu, trạng thái của cam là waiting, chạy mô hình yolo.
@@ -59,68 +59,25 @@ HÀM process_results_from_yolo:
 """
 
 import cv2
-import json
-import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 from concurrent.futures import ThreadPoolExecutor
-import threading
 
-from utils.CamThread import CamThread
+from bootstrap import bootstrap
 from utils.visual import FPSCalculator, make_grid
-from utils.CamInfo import SlotInfo, CamInfo
-from utils.process_results_from_yolo import process_results_from_yolo
+from process.process_results_from_yolo import process_results_from_yolo
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
 config_file = project_root / "config" / "config.json"
 model_file = project_root / "model" / "best.pt"
 
-model = YOLO(model_file).to('mps:0')
+image_size, classes, cameras, cam_threads, camera_locks, device = bootstrap(config_file)
+
+model = YOLO(model_file).to(device)
 model.fuse()
 
-with open(config_file, 'r') as f:
-    config = json.load(f)
-image_size = config["image_size"]
-classes = config["classes"]
-slot_expected_items = {i: config[f"slot_{i}"] for i in range(1, 11)}
-urls = [config[f"url_{i}"] for i in range(1, 5)]
-cam_configs = [
-    ("cam_1", 1),
-    ("cam_2", 1),
-    ("cam_3", 1),
-    ("cam_4", 1)
-]
-
-slot_will_be_checked_of_cam_1 = [1, 2, 3]
-slot_will_be_checked_of_cam_2 = [1, 2, 3, 4, 5]
-slot_will_be_checked_of_cam_3 = [6, 7, 8]
-slot_will_be_checked_of_cam_4 = [6, 7, 8, 9, 10]
-
-slots = {i: SlotInfo(expected_item=slot_expected_items[i]) for i in range(1, 11)}
-
-slots_list_for_cam_12 = {i: slots[i] for i in range(1, 6)}
-slots_list_for_cam_34 = {i: slots[i] for i in range(6, 11)}
-
-cameras = {
-    "cam_1": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_1, slots_list=slots_list_for_cam_12),
-    "cam_2": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_2, slots_list=slots_list_for_cam_12),
-    "cam_3": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_3, slots_list=slots_list_for_cam_34),
-    "cam_4": CamInfo(slot_will_be_checked=slot_will_be_checked_of_cam_4, slots_list=slots_list_for_cam_34),
-}
-
-cam_threads = {
-    name: CamThread(name, source, mode="webcam") # hoặc mode="rtsp"
-    for name, source in cam_configs
-}
-
-camera_locks = {
-    cam_id: threading.Lock() 
-    for cam_id in cameras.keys()
-}
-
 executor = ThreadPoolExecutor(max_workers=4)
-
 fps_calc = FPSCalculator()
 
 while True:
@@ -140,7 +97,7 @@ while True:
     cam_names = list(frames.keys())
     frame_list = [frames[n] for n in cam_names]
 
-    batch_results = model(frame_list, imgsz=image_size, device="mps:0")
+    batch_results = model(frame_list, imgsz=image_size, conf=0.5, device=device)
     # khi không có object thì chạy mất 50ms
     # khi có object thì chạy mất 100ms
 
@@ -156,8 +113,8 @@ while True:
 
     sys_fps = fps_calc.get_fps()
     grid = make_grid(frames, fps_values, sys_fps)
-    cv2.imshow("4 Cameras - Assembly Check System", grid)
-        
+    cv2.imshow("Checking product packaging", grid)
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
@@ -166,4 +123,3 @@ for cam in cam_threads.values():
     cam.release()
 executor.shutdown(wait=True)
 cv2.destroyAllWindows()
-print("[INFO] System stopped")

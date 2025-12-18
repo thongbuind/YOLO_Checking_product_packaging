@@ -1,7 +1,7 @@
 {
     "image_size": 640,
-    "batch_size": 16,
-    "epochs": 10,
+    "training_batch_size": 16,
+    "training_epochs": 10,
     "train_ratio": 0.8,
     "val_ratio": 0.1,
     "url_1": "",

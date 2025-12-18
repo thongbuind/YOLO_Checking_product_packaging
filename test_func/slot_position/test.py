@@ -6,7 +6,7 @@ import os
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(ROOT)
 
-from src.utils.slot_position import slot_position
+from logic.slot_position import slot_position
 
 LABEL_EXT = ".txt"
 IMG_EXTS = [".jpg", ".jpeg", ".png", ".bmp"]

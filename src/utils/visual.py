@@ -95,24 +95,21 @@ def make_grid(frames, fps_values, sys_fps):
     return combined
 
 SLOT_COLORS = {
-    "empty": (0, 255, 255),      # Vàng - Slot trống
-    "oke": (0, 255, 0),      # Xanh lá - Slot có item đúng
-    "wrong": (0, 0, 255),    # Đỏ - Slot có item sai
-    "default": (128, 128, 128) # Xám - State không xác định
+    "empty": (0, 255, 255),      # Vàng
+    "oke": (0, 255, 0),          # Xanh lá
+    "wrong": (0, 0, 255),        # Đỏ
+    "default": (128, 128, 128)   # Xám
 }
 
-# Màu item
-ITEM_COLOR = (255, 255, 0)  # Vàng
+ITEM_COLOR = (0, 255, 255)  # Vàng
 
-# Màu camera state text
 CAM_STATE_COLORS = {
-    "done": (0, 255, 0),       # Xanh lá - Tất cả slots OK
-    "false": (0, 0, 255),      # Đỏ - Có ít nhất 1 slot sai
-    "checking": (0, 255, 255), # Vàng - Đang kiểm tra
-    "waiting": (128, 128, 128) # Xám - Chờ slots xuất hiện
+    "done": (0, 255, 0),       # Xanh lá
+    "false": (0, 0, 255),      # Đỏ
+    "checking": (0, 255, 255), # Vàng
+    "waiting": (255, 255, 255)       # Trắng
 }
 
-# Cấu hình text
 CAM_LABEL_COLOR = (0, 255, 255)
 SLOT_LINE_THICKNESS = 3
 ITEM_LINE_THICKNESS = 2
@@ -122,10 +119,9 @@ TEXT_SCALE = 0.6
 TEXT_SCALE_SMALL = 0.5
 TEXT_SCALE_LARGE = 0.8
 
-# Cấu hình overlay (nền mờ)
 OVERLAY_COLOR = (0, 0, 0)      # Đen
 OVERLAY_ALPHA = 0.5            # Độ trong suốt (0-1)
-OVERLAY_PADDING = 10           # Khoảng cách padding
+OVERLAY_PADDING = 5            # Khoảng cách padding
 
 def draw_visualization(frame, cam_info, items_boxes):
     _draw_all_slots(frame, cam_info)
