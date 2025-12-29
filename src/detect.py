@@ -64,7 +64,7 @@ from ultralytics import YOLO
 from concurrent.futures import ThreadPoolExecutor
 
 from bootstrap import bootstrap
-from utils.visual import FPSCalculator, make_grid
+from utils.visual import make_grid
 from process.process_results_from_yolo import process_results_from_yolo
 
 current_file = Path(__file__).resolve()
@@ -72,34 +72,26 @@ project_root = current_file.parent.parent
 config_file = project_root / "config" / "config.json"
 model_file = project_root / "model" / "best.pt"
 
-image_size, classes, cameras, cam_threads, camera_locks, device = bootstrap(config_file)
+image_size, classes, cameras, cam_threads, device = bootstrap(config_file)
 
 model = YOLO(model_file).to(device)
 model.fuse()
 
 executor = ThreadPoolExecutor(max_workers=4)
-fps_calc = FPSCalculator()
 
 while True:
-    fps_calc.update()
     frames = {}
-    fps_values = {}
-        
     for name, cam in cam_threads.items():
         frame, fps = cam.read()
         if frame is not None:
             frames[name] = frame
-            fps_values[name] = fps
         
     if len(frames) != 4:
         continue
-        
     cam_names = list(frames.keys())
     frame_list = [frames[n] for n in cam_names]
 
-    batch_results = model(frame_list, imgsz=image_size, conf=0.5, device=device)
-    # khi không có object thì chạy mất 50ms
-    # khi có object thì chạy mất 100ms
+    batch_results = model(frame_list, imgsz=image_size, conf=0.5, device=device, verbose=False)
 
     frames = process_results_from_yolo(
         frames=frames,
@@ -107,12 +99,10 @@ while True:
         cameras=cameras,
         cam_names=cam_names,
         classes=classes,
-        camera_locks=camera_locks,
         executor=executor
     )
 
-    sys_fps = fps_calc.get_fps()
-    grid = make_grid(frames, fps_values, sys_fps)
+    grid = make_grid(frames)
     cv2.imshow("Checking product packaging", grid)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):

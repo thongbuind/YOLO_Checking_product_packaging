@@ -17,7 +17,8 @@
         "day_lgbt", 
         "day_white", 
         "pack_circut", 
-        "day_gray"
+        "day_gray", 
+        "full_box"
     ],
     "slot_1": "mach_nho",
     "slot_2": "mach_nho",

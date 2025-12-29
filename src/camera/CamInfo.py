@@ -51,13 +51,28 @@ class CamInfo:
     def get_slot(self, slot_id: int) -> Optional[SlotInfo]:
         return self.slots_list.get(slot_id)
 
-    def update_slot(self, slot_mapping: dict[int, int], slots_boxes: list[np.ndarray]):
+    def update_slot(self, slot_mapping):
+        # predict_slot trả về (slot_mapping, best_match)
+        if isinstance(slot_mapping, tuple): 
+            slot_mapping = slot_mapping[0]
+
         offset = 0
-        if self.slot_will_be_checked[0] >= 6:
+        if self.slot_will_be_checked and self.slot_will_be_checked[0] >= 6:
             offset = 5
 
-        for slot_num, box_idx in slot_mapping.items():
+        for slot_num, value in slot_mapping.items():
             adjusted_slot_id = slot_num + offset
             slot = self.get_slot(adjusted_slot_id)
-            if slot is not None:
-                slot.update(slots_boxes[box_idx])
+            if slot is None:
+                continue
+
+            # value = [det_idx, points]
+            if (
+                isinstance(value, (list, tuple)) and
+                len(value) == 2
+            ):
+                points = np.array(value[1]) if value[1] is not None else None
+            else:
+                points = None
+
+            slot.update(points)

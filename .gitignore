@@ -12,4 +12,4 @@ model/
 
 test_func/process_result_from_yolo/data
 test_func/process_result_from_yolo/output
-
+test_func/predict_slot/result

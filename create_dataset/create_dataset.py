@@ -129,19 +129,9 @@ def add_noise(img):
     out = img.astype(np.float32) + noise
     return np.clip(out, 0, 255).astype(np.uint8)
 
-def flip_h(img, labels):
-    """Lật ngang"""
-    img_flipped = cv2.flip(img, 1)
-    new = []
-    for cls, coords in labels:
-        nc = []
-        for i in range(4):
-            x = coords[i*2]
-            y = coords[i*2+1]
-            nc.append(1 - x)
-            nc.append(y)
-        new.append((cls, nc))
-    return img_flipped, new
+def blur_image(img, kernel_size=5):
+    """Làm mờ ảnh bằng Gaussian Blur"""
+    return cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
 
 print("\nTạo thư mục tạm...")
 os.makedirs(tmp_dir / "images", exist_ok=True)
@@ -201,17 +191,14 @@ for idx, img_path in enumerate(img_paths):
         batch_2.append((f"{sample_name}_noise{chosen_noise_level}", img_noise, sample_labels))
     
     # Nhân đôi để data lên 8n mẫu bằng cách chọn 1 augmentation mới
-    augmentation_options = ['flip', 'rot90', 'rot180', 'rot270']
+    augmentation_options = ['rot90', 'rot180', 'rot270', 'blur']
     chosen_aug = random.choice(augmentation_options)
     
     final_batch = []
     for sample_name, sample_img, sample_labels in batch_2:
         final_batch.append((sample_name, sample_img, sample_labels))
         
-        if chosen_aug == 'flip':
-            img_aug, lab_aug = flip_h(sample_img, sample_labels)
-            final_batch.append((f"{sample_name}_flip", img_aug, lab_aug))
-        elif chosen_aug == 'rot90':
+        if chosen_aug == 'rot90':
             img_aug, lab_aug = rotate_90(sample_img, sample_labels)
             final_batch.append((f"{sample_name}_aug90", img_aug, lab_aug))
         elif chosen_aug == 'rot180':
@@ -220,6 +207,9 @@ for idx, img_path in enumerate(img_paths):
         elif chosen_aug == 'rot270':
             img_aug, lab_aug = rotate_270(sample_img, sample_labels)
             final_batch.append((f"{sample_name}_aug270", img_aug, lab_aug))
+        elif chosen_aug == 'blur':
+            img_aug = blur_image(sample_img, kernel_size=5)
+            final_batch.append((f"{sample_name}_blur", img_aug, sample_labels))
     
     for sample_name, sample_img, sample_labels in final_batch:
         img_path_tmp = tmp_dir / "images" / f"{sample_name}.jpg"

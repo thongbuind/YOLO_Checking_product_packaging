@@ -64,3 +64,61 @@ def is_item_in_slot(item_points: np.ndarray, slot_points: np.ndarray) -> bool:
 
 def is_valid_item(item_name: str, expected_item: str) -> bool:
     return item_name == expected_item
+
+# Tính độ lệch giữa 2 box
+def calculate_deviation(box1, box2):
+    """
+    độ lệch = diện tích box1 + diện tích box2 - 2 * diện tích giao
+    """
+    area1 = bbox_area(box1)
+    area2 = bbox_area(box2)
+    intersection = bbox_intersection_area(box1, box2)
+    
+    return area1 + area2 - 2 * intersection
+
+def get_box_center(box):
+    return np.mean(box, axis=0)
+
+def transform_point(point, angle, scale, translation):
+    """Transform một điểm: rotate -> scale -> translate"""
+    # Rotation matrix
+    cos_a = np.cos(angle)
+    sin_a = np.sin(angle)
+    rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    
+    # Apply transformation
+    transformed = rot_matrix @ point * scale + translation
+    return transformed
+
+def transform_box(box, angle, scale, translation):
+    """Transform toàn bộ box"""
+    return np.array([transform_point(pt, angle, scale, translation) for pt in box])
+
+def get_transform_params(layout_corners, target_corners):
+    """
+    Tính các tham số transform để 2 góc của layout khớp với 2 góc của target
+    layout_corners: 2 điểm từ layout
+    target_corners: 2 điểm từ full_box
+    Returns: angle, scale, translation
+    """
+    # Vector từ góc 1 đến góc 2
+    layout_vec = layout_corners[1] - layout_corners[0]
+    target_vec = target_corners[1] - target_corners[0]
+    
+    # Tính góc xoay
+    angle_layout = np.arctan2(layout_vec[1], layout_vec[0])
+    angle_target = np.arctan2(target_vec[1], target_vec[0])
+    angle = angle_target - angle_layout
+    
+    # Tính scale
+    scale = np.linalg.norm(target_vec) / np.linalg.norm(layout_vec)
+    
+    # Tính translation (sau khi rotate và scale, dịch chuyển góc 1 đến vị trí đúng)
+    cos_a = np.cos(angle)
+    sin_a = np.sin(angle)
+    rot_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    
+    rotated_scaled_corner = (rot_matrix @ layout_corners[0]) * scale
+    translation = target_corners[0] - rotated_scaled_corner
+    
+    return angle, scale, translation

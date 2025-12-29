@@ -13,7 +13,7 @@ def slot_position(slots_boxes):
         Trường hợp 3: x âm y âm - slot 1 gần góc dưới bên trái nhất.
         Trường hợp 4: x âm y dương - slot 1 gần góc dưới bên phải nhất.
 
-        Với line2 thì điểm nào gần slot  hơn thì sẽ là slot , điểm còn lại là slot 5.
+        Với line2 thì điểm nào gần slot 1 hơn thì sẽ là slot 4, điểm còn lại là slot 5.
     """
     boxes = []
     for slot_pts in slots_boxes:
@@ -61,10 +61,10 @@ def slot_position(slots_boxes):
     slot_num = 1
 
     for idx in line3_order:
-        result[slot_num] = idx
+        result[slot_num] = [idx, slots_boxes[idx].tolist()]
         slot_num += 1
     for idx in line2_order:
-        result[slot_num] = idx
+        result[slot_num] = [idx, slots_boxes[idx].tolist()]
         slot_num += 1
 
     return result
