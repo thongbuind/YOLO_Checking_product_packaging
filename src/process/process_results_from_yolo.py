@@ -99,9 +99,9 @@ def process_results_from_yolo(frames: dict, batch_results: dict, cameras: dict, 
             for pts, cls_id, score in zip(xyxyxyxy, cls_ids, confs):
                 pts = pts.astype(np.float32)
 
-                if cls_id == 0 and score < 0.3:
+                if cls_id == 0 and score < 0.4:
                     continue
-                elif cls_id >= 1 and score < 0.7: 
+                elif cls_id >= 1 and score < 0.5: 
                     continue
 
                 if cls_id == 0:

@@ -16,12 +16,23 @@ class FPSCalculator:
         return len(self.timestamps) / (self.timestamps[-1] - self.timestamps[0] + 1e-6)
 
 def make_grid(frames):
+    target_size = (640, 640)
+
+    black = np.zeros((target_size[1], target_size[0], 3), dtype=np.uint8)
+
     resized_frames = {}
     for name, frame in frames.items():
-        resized_frames[name] = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_LINEAR)
-    
-    top = np.hstack((resized_frames["cam_1"], resized_frames["cam_2"]))
-    bottom = np.hstack((resized_frames["cam_3"], resized_frames["cam_4"]))
+        resized_frames[name] = cv2.resize(
+            frame, target_size, interpolation=cv2.INTER_LINEAR
+        )
+
+    f1 = resized_frames.get("cam_1", black)
+    f2 = resized_frames.get("cam_2", black)
+    f3 = resized_frames.get("cam_3", black)
+    f4 = resized_frames.get("cam_4", black)
+
+    top = np.hstack((f1, f2))
+    bottom = np.hstack((f3, f4))
     grid = np.vstack((top, bottom))
 
     return grid
@@ -33,7 +44,7 @@ SLOT_COLORS = {
     "default": (128, 128, 128)   # Xám
 }
 
-ITEM_COLOR = (0, 255, 255)  # Vàng
+ITEM_COLOR = (255, 255, 0)    # xanh ngọc
 
 CAM_STATE_COLORS = {
     "done": (0, 255, 0),       # Xanh lá
@@ -62,7 +73,6 @@ def draw_visualization(frame, cam_info, items_boxes):
     _draw_slot_status_table(frame, cam_info)
 
 def _draw_all_slots(frame, cam_info):
-    """Vẽ tất cả slots từ cam_info.slots_list"""
     for slot_id, slot in cam_info.slots_list.items():
         points = slot.get_points()
         if points is None:

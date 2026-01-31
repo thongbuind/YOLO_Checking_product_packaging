@@ -57,7 +57,6 @@ HÀM process_results_from_yolo:
         - If tất cả slot trong slot_will_be_checked có state "oke" (dùng get_state()) thì chuyển state của cam sang "done" (get_state("done")). Else get_state("false)
     - Vẽ lên màn hình các box mà detection_results có, hiển thị cam.state và các cam.slots.state (chỉ các slot có trong danh sách slot_will_be_checked)
 """
-
 import cv2
 from pathlib import Path
 from ultralytics import YOLO
@@ -66,6 +65,18 @@ from concurrent.futures import ThreadPoolExecutor
 from bootstrap import bootstrap
 from utils.visual import make_grid
 from process.process_results_from_yolo import process_results_from_yolo
+
+def center_crop_and_resize(img, out_size):
+    h, w, _ = img.shape
+    size = min(h, w)
+
+    y1 = (h - size) // 2
+    x1 = (w - size) // 2
+
+    crop = img[y1:y1 + size, x1:x1 + size]
+    resized = cv2.resize(crop, (out_size, out_size), interpolation=cv2.INTER_LINEAR)
+
+    return resized
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
@@ -81,20 +92,30 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 while True:
     frames = {}
+    resized_frames = {}
+
     for name, cam in cam_threads.items():
         frame, fps = cam.read()
         if frame is not None:
             frames[name] = frame
-        
-    if len(frames) != 4:
-        continue
-    cam_names = list(frames.keys())
-    frame_list = [frames[n] for n in cam_names]
+            resized_frames[name] = center_crop_and_resize(frame, image_size)
 
-    batch_results = model(frame_list, imgsz=image_size, conf=0.5, device=device, verbose=False)
+    if len(frames) == 0:
+        continue
+
+    cam_names = list(frames.keys())
+    frame_list = [resized_frames[n] for n in cam_names]
+
+    batch_results = model(
+        frame_list,
+        imgsz=image_size,
+        conf=0.4,
+        device=device,
+        verbose=False
+    )
 
     frames = process_results_from_yolo(
-        frames=frames,
+        frames=resized_frames,              
         batch_results=batch_results,
         cameras=cameras,
         cam_names=cam_names,
@@ -111,5 +132,6 @@ while True:
 print("\n[INFO] Shutting down...")
 for cam in cam_threads.values():
     cam.release()
+
 executor.shutdown(wait=True)
 cv2.destroyAllWindows()

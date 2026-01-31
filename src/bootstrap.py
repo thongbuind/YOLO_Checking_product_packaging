@@ -1,5 +1,4 @@
 import json
-import threading
 
 from camera.CamThread import CamThread
 from camera.CamInfo import SlotInfo, CamInfo
@@ -10,6 +9,10 @@ def bootstrap(config_file):
 
     image_size = config["image_size"]
     classes = config["classes"]
+    url_1 = config["url_1"]
+    url_2 = config["url_2"]
+    url_3 = config["url_3"]
+    url_4 = config["url_4"]
 
     slot_expected_items = {
         i: config[f"slot_{i}"] for i in range(1, 11)
@@ -31,14 +34,14 @@ def bootstrap(config_file):
     }
 
     cam_configs = [
-        ("cam_1", 1),
-        ("cam_2", 1),
-        ("cam_3", 1),
-        ("cam_4", 1),
+        ("cam_1", url_1),
+        ("cam_2", url_2),
+        ("cam_3", url_3),
+        ("cam_4", url_4),
     ]
 
     cam_threads = {
-        name: CamThread(name, source, mode="webcam")
+        name: CamThread(name, source, mode="rtsp")
         for name, source in cam_configs
     }
 
