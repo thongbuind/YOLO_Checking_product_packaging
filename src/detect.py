@@ -56,6 +56,12 @@ HÀM process_results_from_yolo:
         - Nếu "true" thì dùng set_state("oke"), "false" thì set_state("wrong")
         - If tất cả slot trong slot_will_be_checked có state "oke" (dùng get_state()) thì chuyển state của cam sang "done" (get_state("done")). Else get_state("false)
     - Vẽ lên màn hình các box mà detection_results có, hiển thị cam.state và các cam.slots.state (chỉ các slot có trong danh sách slot_will_be_checked)
+
+NÂNG CẤP cải thiện FPS:
+    - Ban đầu cả 4 cam đều đang "waiting" gửi cả 4 frame cho yolo detect.
+    - Khi một camera chuyển sang state != "waiting" thì chỉ gửi frame đó cho yolo thôi, nó là active_cam.
+    - Khi active_cam chuyển state về "waiting" (trong 5 frames liên tiếp) thì quay lại gửi batch 4 frame để chờ active_cam mới xuất hiện.
+    - Đề phòng trường hợp có 2 cam cùng chuyển state thì lấy cam đứng trước
 """
 import cv2
 from pathlib import Path
@@ -64,19 +70,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from bootstrap import bootstrap
 from utils.visual import make_grid
-from process.process_results_from_yolo import process_results_from_yolo
-
-def center_crop_and_resize(img, out_size):
-    h, w, _ = img.shape
-    size = min(h, w)
-
-    y1 = (h - size) // 2
-    x1 = (w - size) // 2
-
-    crop = img[y1:y1 + size, x1:x1 + size]
-    resized = cv2.resize(crop, (out_size, out_size), interpolation=cv2.INTER_LINEAR)
-
-    return resized
+from process.process_results_from_yolo import process_results_from_yolo, center_crop_and_resize
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
@@ -89,6 +83,9 @@ model = YOLO(model_file).to(device)
 model.fuse()
 
 executor = ThreadPoolExecutor(max_workers=4)
+
+active_cam = None
+waiting_counter = {}
 
 while True:
     frames = {}
@@ -104,7 +101,13 @@ while True:
         continue
 
     cam_names = list(frames.keys())
-    frame_list = [resized_frames[n] for n in cam_names]
+    
+    if active_cam is None:
+        frame_list = [resized_frames[n] for n in cam_names]
+        process_cam_names = cam_names
+    else:
+        frame_list = [resized_frames[active_cam]]
+        process_cam_names = [active_cam]
 
     batch_results = model(
         frame_list,
@@ -118,10 +121,26 @@ while True:
         frames=resized_frames,              
         batch_results=batch_results,
         cameras=cameras,
-        cam_names=cam_names,
+        cam_names=process_cam_names,
         classes=classes,
         executor=executor
     )
+
+    if active_cam is not None: # đang ở mode 1 cam
+        if cameras[active_cam].state == "waiting":
+            waiting_counter[active_cam] = waiting_counter.get(active_cam, 0) + 1
+            if waiting_counter[active_cam] >= 5:
+                active_cam = None
+                waiting_counter = {}
+        else:
+            waiting_counter[active_cam] = 0
+
+    else: # đang ở mode batch
+        for name in cam_names:
+            if name in cameras and cameras[name].state != "waiting":
+                active_cam = name
+                waiting_counter = {n: 0 for n in cam_names}
+                break
 
     grid = make_grid(frames)
     cv2.imshow("Checking product packaging", grid)

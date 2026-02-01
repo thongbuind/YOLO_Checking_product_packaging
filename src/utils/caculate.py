@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 from itertools import combinations
 from shapely.geometry import Polygon
 
@@ -80,7 +81,6 @@ def get_box_center(box):
     return np.mean(box, axis=0)
 
 def transform_point(point, angle, scale, translation):
-    """Transform một điểm: rotate -> scale -> translate"""
     # Rotation matrix
     cos_a = np.cos(angle)
     sin_a = np.sin(angle)
@@ -91,16 +91,9 @@ def transform_point(point, angle, scale, translation):
     return transformed
 
 def transform_box(box, angle, scale, translation):
-    """Transform toàn bộ box"""
     return np.array([transform_point(pt, angle, scale, translation) for pt in box])
 
 def get_transform_params(layout_corners, target_corners):
-    """
-    Tính các tham số transform để 2 góc của layout khớp với 2 góc của target
-    layout_corners: 2 điểm từ layout
-    target_corners: 2 điểm từ full_box
-    Returns: angle, scale, translation
-    """
     # Vector từ góc 1 đến góc 2
     layout_vec = layout_corners[1] - layout_corners[0]
     target_vec = target_corners[1] - target_corners[0]
@@ -122,3 +115,15 @@ def get_transform_params(layout_corners, target_corners):
     translation = target_corners[0] - rotated_scaled_corner
     
     return angle, scale, translation
+
+def center_crop_and_resize(img, out_size):
+    h, w, _ = img.shape
+    size = min(h, w)
+
+    y1 = (h - size) // 2
+    x1 = (w - size) // 2
+
+    crop = img[y1:y1 + size, x1:x1 + size]
+    resized = cv2.resize(crop, (out_size, out_size), interpolation=cv2.INTER_LINEAR)
+
+    return resized
