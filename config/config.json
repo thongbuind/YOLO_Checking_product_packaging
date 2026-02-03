@@ -4,10 +4,10 @@
     "training_epochs": 10,
     "train_ratio": 0.8,
     "val_ratio": 0.1,
-    "url_1": "rtsp://admin:TIJEQB@192.168.1.134:554/ch1/main",
-    "url_2": "rtsp://admin:TIJEQB@192.168.1.134:554/ch1/main",
+    "url_1": "rtsp://admin:CPSFLT@192.168.1.160:554/ch1/main",
+    "url_2": "rtsp://admin:DVCLRQ@192.168.1.116:554/ch1/main",
     "url_3": "rtsp://admin:BWKUYM@192.168.1.144:554/ch1/main",
-    "url_4": "rtsp://admin:BWKUYM@192.168.1.144:554/ch1/main",
+    "url_4": "rtsp://admin:KXILGD@192.168.1.152:554/ch1/main",
     "classes": [
         "slot", 
         "mach_nho", 
